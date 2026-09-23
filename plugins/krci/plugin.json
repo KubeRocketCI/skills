@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "krci",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Agent skills for delivering software on the KubeRocketCI platform, from the ticket to production: for BA, PO, PM, developers, QA, and DevOps engineers",
   "author": {
     "name": "KubeRocketCI Team",

@@ -129,9 +129,9 @@ Task skills are named `krci-<verb>-<object>`. When one matches the request, run 
 | Role | Skills |
 |---|---|
 | BA, PO, PM | none yet |
-| Developer | none yet |
-| QA | none yet |
-| DevOps | none yet |
+| Developer | `krci-debug-environment`: why an environment is unhealthy or out of sync, and who owns the fix |
+| QA | `krci-debug-environment`: why an environment is unhealthy or out of sync, and who owns the fix |
+| DevOps | `krci-debug-environment`: why an environment is unhealthy or out of sync, and who owns the fix |
 
 ## Further reading
 
