@@ -1,0 +1,38 @@
+{
+  "name": "krci",
+  "version": "0.1.0",
+  "description": "Agent skills for delivering software on the KubeRocketCI platform, from the ticket to production: for BA, PO, PM, developers, QA, and DevOps engineers",
+  "author": {
+    "name": "KubeRocketCI Team",
+    "email": "SupportEPMD-EDP@epam.com",
+    "url": "https://kuberocketci.io"
+  },
+  "homepage": "https://docs.kuberocketci.io",
+  "repository": "https://github.com/KubeRocketCI/skills",
+  "license": "Apache-2.0",
+  "keywords": [
+    "kuberocketci",
+    "krci",
+    "ci-cd",
+    "kubernetes",
+    "tekton",
+    "argo-cd",
+    "gitops",
+    "delivery",
+    "quality-gates",
+    "troubleshooting"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "KubeRocketCI",
+    "shortDescription": "Deliver software on KubeRocketCI, from ticket to production",
+    "developerName": "KubeRocketCI Team",
+    "category": "Developer Tools",
+    "websiteURL": "https://kuberocketci.io",
+    "defaultPrompt": [
+      "Which version of my project runs in each environment on KubeRocketCI?",
+      "Why did the last pipeline run of my project fail?",
+      "Did the quality gates of my qa environment pass?"
+    ]
+  }
+}

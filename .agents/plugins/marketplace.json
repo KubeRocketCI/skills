@@ -1,0 +1,20 @@
+{
+  "name": "kuberocketci-skills",
+  "interface": {
+    "displayName": "KubeRocketCI Skills"
+  },
+  "plugins": [
+    {
+      "name": "krci",
+      "source": {
+        "source": "local",
+        "path": "./plugins/krci"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

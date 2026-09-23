@@ -1,0 +1,31 @@
+{
+  "name": "kuberocketci-skills",
+  "owner": {
+    "name": "KubeRocketCI Team",
+    "email": "SupportEPMD-EDP@epam.com"
+  },
+  "description": "Agent skills for everyone who delivers software on the KubeRocketCI platform",
+  "metadata": {
+    "description": "Agent skills for everyone who delivers software on the KubeRocketCI platform"
+  },
+  "plugins": [
+    {
+      "name": "krci",
+      "source": "./plugins/krci",
+      "description": "Every KubeRocketCI delivery skill: lifecycle from ticket to production, platform vocabulary, tool preflight, safety contract, and ownership verdicts for BA, PO, PM, developers, QA, and DevOps.",
+      "category": "devops",
+      "keywords": [
+        "kuberocketci",
+        "krci",
+        "ci-cd",
+        "kubernetes",
+        "tekton",
+        "argo-cd",
+        "gitops",
+        "delivery",
+        "quality-gates",
+        "troubleshooting"
+      ]
+    }
+  ]
+}

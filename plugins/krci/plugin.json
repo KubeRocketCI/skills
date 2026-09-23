@@ -1,0 +1,26 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "krci",
+  "version": "0.1.0",
+  "description": "Agent skills for delivering software on the KubeRocketCI platform, from the ticket to production: for BA, PO, PM, developers, QA, and DevOps engineers",
+  "author": {
+    "name": "KubeRocketCI Team",
+    "email": "SupportEPMD-EDP@epam.com",
+    "url": "https://kuberocketci.io"
+  },
+  "homepage": "https://docs.kuberocketci.io",
+  "repository": "https://github.com/KubeRocketCI/skills",
+  "license": "Apache-2.0",
+  "keywords": [
+    "kuberocketci",
+    "krci",
+    "ci-cd",
+    "kubernetes",
+    "tekton",
+    "argo-cd",
+    "gitops",
+    "delivery",
+    "quality-gates",
+    "troubleshooting"
+  ]
+}
