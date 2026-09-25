@@ -15,7 +15,7 @@ Planned names are proposals and change with the eval cases. A planned skill beco
 | test | qa, devops | `krci-add-autotest` | planned | How an autotest project becomes a quality gate or a standalone tests run. |
 | deploy | all | `krci-map-environments` | planned | Which version of each project runs in which environment. |
 | deploy | dev, devops | `krci-write-chart` | planned | What the chart in `deploy-templates/` and the GitOps values file must provide. |
-| operate | dev, qa, devops | `krci-debug-environment` | planned | Why an environment is unhealthy or out of sync, and who owns the fix. |
+| operate | dev, qa, devops | `krci-debug-environment` | available | Why an environment is unhealthy, out of sync, or shows nothing deployed, and who owns the fix. |
 
 ## By role
 

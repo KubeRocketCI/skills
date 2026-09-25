@@ -2,7 +2,7 @@
 name: krci-overview
 description: Foundation for delivering software on KubeRocketCI (KRCI, formerly EDP), from ticket to production, for every role. Use when a request mentions KubeRocketCI, krci, or the portal; projects or codebases, branches, builds, or Tekton pipeline runs; deployments, environments or stages, or Argo CD applications of the platform; quality gates, autotests, or promotion; where a ticket's change is deployed; a custom pipeline or the chart in deploy-templates/; and before running krci or kubectl against a tenant. Covers the lifecycle, roles, vocabulary, tools, preflight, safety contract, and ownership verdict.
 license: Apache-2.0
-compatibility: Requires a shell and the krci CLI v0.15.0 or later with a portal session. kubectl under the user's own RBAC and a Git provider CLI are optional. Written against KubeRocketCI 3.15.
+compatibility: Requires a shell and the krci CLI v0.16.0 or later with a portal session. kubectl under the user's own RBAC and a Git provider CLI are optional. Written against KubeRocketCI 3.15.
 metadata:
   access: read-only
   roles: all
@@ -19,7 +19,7 @@ Names, namespaces, and command syntax are read from the platform. Do not constru
 
 Run it before the first krci or kubectl call of a session. Answering a question from this skill alone needs no preflight.
 
-1. Run `krci version`, then `krci auth status`. The session is valid only when standard output contains `Authenticated`. The command exits 0 even without a session, so its exit code proves nothing.
+1. Run `krci version`, then `krci auth status`. The session is valid when the command exits 0. Without a valid session it exits 1 and names the reason on standard error.
 2. Without a session, ask the user to run `krci auth login --portal-url <portal-url>`. It is a browser flow that an agent cannot complete. Headless setup is in [references/tooling.md](references/tooling.md).
 3. kubectl is optional. If present, check who you are and what you may do with `kubectl auth whoami` and `kubectl auth can-i --list -n <platform-namespace>` before relying on it.
 4. The platform namespace comes from the `namespace` field of `krci project list -o json`, or from the user.
@@ -66,7 +66,7 @@ The API group is `v2.edp.epam.com`. The platform was formerly called EDP, so `ed
 ## Choose the tool
 
 1. **krci first.** It needs only a portal login, covers environments on remote clusters, and reads run history from Tekton Results, as the portal does. A finished PipelineRun may already be gone from the cluster, so a `kubectl get pipelineruns` that finds nothing does not mean nothing ran.
-2. **kubectl when krci cannot answer**: pod logs and events, custom resource status messages, Argo CD Application conditions. Read-only verbs, the user's RBAC.
+2. **kubectl when krci cannot answer**: pod logs and events, and status messages of resources that krci does not show. Read-only verbs, the user's RBAC.
 3. **The Git provider** for pull requests, branches, tags, and values in the GitOps repository.
 
 Command groups are `project`, `deployment`, `env`, `pipelinerun` (alias `run`), `sca`, `sonar`, `auth`, `version`. Each group goes `list` then `get`. Confirm flags with `krci <group> <verb> --help` instead of inventing them. To find why a run failed, start here. It returns the failed task, step, exit code, and log tail of the most recent finished match:
@@ -84,7 +84,7 @@ krci env get <deployment> <environment> -o json |
   jq 'if type == "object" and has("schemaVersion") then .data else . end'
 ```
 
-Applications of an environment are under `projects[]` (`name`, `status`, `sync`, `version`). Shapes per command are in [references/tooling.md](references/tooling.md).
+Applications of an environment are under `projects[]` (`name`, `status`, `sync`, `version`, `conditions`, `operation`). Shapes per command, and the shapes of a project that was never deployed, was cleaned, or has no Application, are in [references/tooling.md](references/tooling.md).
 
 ## Safety contract
 
@@ -109,13 +109,13 @@ On `Forbidden`, report the missing permission and which role has it. Do not look
 The first line of a diagnosis is the `Owner:` line, also when you could not run any command: say so under `Evidence`. The user needs to know whether to act or to escalate before reading the analysis. When the owner is not the user, `Next step` carries the escalation bundle in the same answer: write a fact you have not read yet as a placeholder with the command that reads it, instead of offering to fetch it later. Everything else, including an answer to a cause the user suggested, goes under `Cause` and `Evidence` or after the block.
 
 ```text
-Owner: application team | platform team | external system
+Owner: application team | platform team | external system | none
 Cause: <one sentence naming the failed handoff>
 Evidence: <commands run and the decisive output lines>
 Next step: <the fix, or an escalation bundle when the owner is not the user>
 ```
 
-The application team owns source, tests, the Dockerfile, the Helm chart in `deploy-templates/`, and values in the GitOps repository. The platform team owns integrations and their secrets, cluster registration, Argo CD, operators, webhooks, and RBAC. A developer role cannot read the `argocd` namespace or platform secrets, so escalate instead of sending the user there. The handoff map, Argo CD states, and the escalation bundle are in [references/ownership.md](references/ownership.md).
+`none` is the owner when nothing is broken, for example an environment that was never deployed. The application team owns source, tests, the Dockerfile, the Helm chart in `deploy-templates/`, and values in the GitOps repository. The platform team owns integrations and their secrets, cluster registration, Argo CD, operators, webhooks, and RBAC. A developer role cannot read the `argocd` namespace or platform secrets, so escalate instead of sending the user there. The handoff map, Argo CD states, and the escalation bundle are in [references/ownership.md](references/ownership.md).
 
 | Thought | Reality |
 |---|---|
@@ -129,9 +129,9 @@ Task skills are named `krci-<verb>-<object>`. When one matches the request, run 
 | Role | Skills |
 |---|---|
 | BA, PO, PM | none yet |
-| Developer | none yet |
-| QA | none yet |
-| DevOps | none yet |
+| Developer | `krci-debug-environment`: why an environment is unhealthy, out of sync, or shows nothing deployed, and who owns the fix |
+| QA | `krci-debug-environment`: why an environment is unhealthy, out of sync, or shows nothing deployed, and who owns the fix |
+| DevOps | `krci-debug-environment`: why an environment is unhealthy, out of sync, or shows nothing deployed, and who owns the fix |
 
 ## Further reading
 
