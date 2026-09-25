@@ -8,13 +8,14 @@ Three tiers, tried in this order: the krci CLI, kubectl, the Git provider. Skill
 - [Sessions](#sessions)
 - [JSON contract](#json-contract)
 - [Errors and empty results](#errors-and-empty-results)
+- [Deploy history of one environment](#deploy-history-of-one-environment)
 - [What krci does not cover](#what-krci-does-not-cover)
 - [kubectl](#kubectl)
 - [Git provider](#git-provider)
 
 ## krci CLI
 
-Verified against krci `v0.15.0`. The CLI grows quickly, so `krci <group> <verb> --help` is the authority.
+Verified against krci `v0.16.0`. The CLI grows quickly, so `krci <group> <verb> --help` is the authority.
 
 krci talks to the KubeRocketCI portal over HTTPS with the user's OIDC token. It never touches the Kubernetes API, so it works without a kubeconfig and for environments on remote clusters.
 
@@ -22,9 +23,9 @@ Install with `brew tap KubeRocketCI/homebrew-tap && brew install krci`, or take 
 
 | Group (alias) | Verbs | Answers |
 |---|---|---|
-| `project` (`proj`) | `list`, `get <project>`, `deployments <project>`, `build <project>` | Which projects exist, their status, where each version is deployed. `build` starts the build pipeline of a branch the way the portal's Build button does, and changes state. |
-| `deployment` (`dp`) | `list`, `get <deployment>` | Deployment flows, their projects and environments. |
-| `env` (`e`) | `list`, `get <deployment> <environment>` | Health, sync, version, ingress URLs, quality gates, target cluster and namespace. |
+| `project` (`proj`) | `list`, `get <project>`, `deployments <project>`, `versions <project>`, `build <project>` | Which projects exist, their status, where each version is deployed, which versions were built per branch. `build` starts the build pipeline of a branch the way the portal's Build button does, and changes state. |
+| `deployment` (`dp`) | `list`, `get <deployment>` | Deployment flows, their projects and environments, and the status message of each. |
+| `env` (`e`) | `list`, `get <deployment> <environment>` | Health, sync, version, Argo CD conditions and last sync operation, ingress URLs, quality gates, target cluster and namespace. |
 | `pipelinerun` (`run`) | `list`, `get <run>`, `start <pipeline>` | Run history and failure diagnosis. `start` changes state. |
 | `sonar` | `list`, `get`, `gate`, `issues` | Quality gate and issues per project, branch, or pull request. |
 | `sca` | `list`, `get`, `components`, `findings` | Dependency-Track components and vulnerabilities. |
@@ -48,10 +49,10 @@ Interactive login is a browser flow with OIDC and PKCE. An agent cannot complete
 krci auth login --portal-url https://<portal-host>
 ```
 
-Check the session by reading standard output. Both a valid and a missing session exit 0, and the "not authenticated" message goes to standard error:
+Check the session by the exit code. A valid session exits 0. A missing or expired session, or a token the portal rejects, exits 1 with the reason on standard error:
 
 ```bash
-krci auth status 2>/dev/null | grep -q 'Authenticated' || echo "no krci session"
+krci auth status >/dev/null 2>&1 || echo "no krci session"
 ```
 
 Tokens refresh automatically while the refresh token is valid. There is one portal per configuration, no named contexts. The configuration lives in `~/.config/krci/config.yaml` on every operating system.
@@ -72,7 +73,7 @@ Every data command accepts `-o json`. Two shapes exist:
 
 | Shape | Commands |
 |---|---|
-| `{"schemaVersion": "1", "data": ...}` | `env list`, `env get`, `project deployments`, `sonar *`, `sca *`, `pipelinerun start`, `project build` |
+| `{"schemaVersion": "1", "data": ...}` | `env list`, `env get`, `project deployments`, `project versions`, `auth status`, `sonar *`, `sca *`, `pipelinerun start`, `project build` |
 | bare payload | `project list`, `project get`, `deployment list`, `deployment get`, `pipelinerun list`, `pipelinerun get` |
 
 Normalize before reading fields:
@@ -86,16 +87,30 @@ krci env get <deployment> <environment> -o json | jq "$unwrap | .projects[] | {n
 | Command | Payload after normalizing |
 |---|---|
 | `project list` | array of `{name, namespace, type, language, buildTool, framework, gitServer, status, available}` |
-| `project deployments <project>` | `{project, rows[]}`, rows of `{deployment, env, deployed, status, sync, version, imageTag, imageDigest, cluster, namespace, triggerType, deployedAt, ingressUrls, argocdUrl}` |
+| `project deployments <project>` | `{project, rows[]}`, rows of `{deployment, env, deployed, status, sync, version, imageTag, imageDigest, cluster, namespace, triggerType, deployedAt, ingressUrls, argocdUrl, conditions, operation}` |
+| `project versions <project>` | `{project, streams[]}`, streams of `{branch, image, versions[]}`, versions of `{name, created, digest?}`, newest first. `versions` is empty for a branch that was never built |
 | `env list` | `stages[]` of `{deployment, env, cluster, namespace, triggerType, status, order}` |
-| `env get` | `{deployment, env, status, infrastructure{cluster, namespace, triggerType, deployPipeline, cleanPipeline}, qualityGates[], projects[]}` |
+| `env get` | `{deployment, env, status, order, detailedMessage, description, infrastructure{cluster, namespace, triggerType, deployPipeline, cleanPipeline}, qualityGates[], projects[]}`. `status` and `detailedMessage` are the environment's own: `created`, or `failed` with the reason |
 | `env get` `qualityGates[]` | `{type, stepName, autotestName, branchName}` |
-| `env get` `projects[]` | `{name, status, sync, version, imageTag, imageDigest, ingressUrls, argocdUrl, deployedAt, valuesOverride}` |
+| `env get` `projects[]` | `{name, status, sync, version, imageTag, imageDigest, ingressUrls, argocdUrl, deployedAt, valuesOverride, conditions[], operation}` |
+| `projects[].conditions[]` | `{type, message, lastTransitionTime}`, the Argo CD Application conditions, such as `ComparisonError` |
+| `projects[].operation` | `{phase, message, startedAt, finishedAt}` of the last sync, `null` until the first sync. `phase` is `Running`, `Succeeded`, `Failed`, `Error`, or `Terminating` |
 | `pipelinerun list` | `{pipelineRuns[], logs?, tasks?}`. With `--reason`, `tasks[]` carries `{name, status, duration, failedStep, exitCode, message, logs}` |
 | `sonar list` | `{projects[], paging{pageIndex, pageSize, total}}` |
 | `sca list` | `{items[], totalCount}` |
+| `auth status` | `{authenticated, user?, name?, groups[], expiresAt}`. Without a valid session it exits 1 and prints the error envelope |
 
-A project that is registered in an environment but never deployed has `null` in `status`, `sync`, and `version`. That is an empty environment, not an error. SonarQube measures are strings, convert with `tonumber` before comparing.
+`status` and `sync` of a project are lowercase: `healthy`, `progressing`, `degraded`, `suspended`, `missing`, `unknown`, and `synced`, `outofsync`, `unknown`. `version` is the version the Application points at, and `deployedAt` is when the last sync finished, whatever its `operation.phase`. Neither proves that the version runs.
+
+A project of an environment shows one of three shapes when it runs nothing:
+
+| Shape | Meaning |
+|---|---|
+| `version` and `imageTag` `"NaN"`, `status` `healthy`, `sync` `unknown`, a `ComparisonError` saying `unable to resolve 'NaN'` (`'build/NaN'` for `semver` projects), `operation` `null` | The environment was created and never deployed. `NaN` is the placeholder version of a new environment. |
+| a real `version`, `status` `missing`, `sync` `outofsync`, `operation` `null` | The environment was cleaned. The Application keeps the last deployed version and has no resources. |
+| every field `null` | No Application exists. A healthy environment always has one, so read the environment's own `status` and `detailedMessage`. `failed` names the reason. An empty `status` means the environment is still being created: it waits while the previous environment in the order has no image stream, for example because that environment failed. |
+
+SonarQube measures are strings, convert with `tonumber` before comparing.
 
 ## Errors and empty results
 
@@ -105,14 +120,38 @@ Read commands turn HTTP status codes into plain messages. `project build` and `p
 
 An unknown `--type` or `--status` value is not rejected. It returns an empty list with exit code 0, which looks like "nothing ran". Use only the values listed above.
 
+## Deploy history of one environment
+
+Deploy runs carry no `app.edp.epam.com/codebase` label, so `krci pipelinerun list --project <project> --type deploy` is always empty. List deploy runs and select those of the environment by name:
+
+```bash
+krci pipelinerun list --type deploy -o json |
+  jq --arg d "<deployment>" --arg e "<environment>" \
+    '.pipelineRuns[] | select(.name | test("^deploy-(with-approve-|diff-approve-)?\($d)-\($e)-(auto-)?[a-z0-9]+$"))'
+```
+
+A deploy started from the portal is named `deploy-<deployment>-<environment>-<suffix>`. An automatic deploy is named after the environment's trigger template: `deploy-`, `deploy-with-approve-`, `deploy-diff-approve-`, or `deploy-…-auto-` for autotests. A custom trigger template can use another prefix. The list holds the runs still in the cluster plus the 10 most recent deploy runs from Tekton Results, across all environments.
+
+Runs that are still in the cluster carry the label `app.edp.epam.com/cdstage=<deployment>-<environment>`, which kubectl can select exactly:
+
+```bash
+kubectl get pipelineruns -n <platform-namespace> -l app.edp.epam.com/cdstage=<deployment>-<environment> --sort-by=.metadata.creationTimestamp
+```
+
+The versions a project had in an environment, including runs that Tekton Results no longer holds, are in the history of its Argo CD Application. Each entry has `deployedAt` and the `image.tag` Helm parameter:
+
+```bash
+kubectl get applications.argoproj.io <deployment>-<environment>-<project> -n <platform-namespace> \
+  -o jsonpath='{range .status.history[*]}{.deployedAt}{"\t"}{.source.helm.parameters[?(@.name=="image.tag")].value}{"\n"}{end}'
+```
+
 ## What krci does not cover
 
 | Need | Tier that provides it |
 |---|---|
 | Pod logs and events of a deployed application | kubectl in the environment namespace |
-| Why Argo CD cannot sync: conditions, operation state, per-resource diff | kubectl on the Application resource, or the Argo CD link from `krci env get` |
-| Status message of a Codebase, CDPipeline, or Stage | kubectl on the resource, see the fields in [vocabulary.md](vocabulary.md) |
-| Image tags available for deployment | kubectl on the CodebaseImageStream |
+| Per-resource diff between Git and the cluster | kubectl on the Application resource, or the Argo CD link from `krci env get` |
+| Status message of a Codebase or CodebaseBranch | kubectl on the resource, see the fields in [vocabulary.md](vocabulary.md) |
 | Deploying, promoting, approving a quality gate | The portal. A skill that does this through the cluster says so and passes the confirmation gate. |
 
 ## kubectl

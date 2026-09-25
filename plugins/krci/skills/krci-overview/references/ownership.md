@@ -17,20 +17,23 @@ Operators on the platform do not call each other. Each one reconciles its own re
 
 ## Reading Argo CD Application state
 
+Values are as `krci env get` prints them: health and sync in lowercase, condition types and operation phases as Argo CD writes them.
+
 | State | Meaning | Usual owner |
 |---|---|---|
-| Health `Missing`, Sync `OutOfSync`, no operation | Nothing was deployed yet, or the environment was cleaned. Not a failure. | nobody |
+| `version` `NaN`, health `healthy`, sync `unknown`, `ComparisonError` saying `unable to resolve 'NaN'` (`'build/NaN'` for `semver` projects) | The environment was created and never deployed. `NaN` is the placeholder version of a new environment. Not a failure. | none |
+| Health `missing`, sync `outofsync`, no operation | The environment was cleaned. Not a failure. | none |
 | `ComparisonError` mentioning cluster info, a timeout, or an unreachable server | Argo CD cannot reach the target cluster. | platform team |
 | `ComparisonError` mentioning manifest generation or `helm template` | The chart or its values do not render. | application team |
-| `ComparisonError` saying the target revision cannot be resolved | The version has no matching Git tag: the build did not finish, or the version string is wrong. For `semver` the revision is `build/<version>`, otherwise the image tag. A project on the deprecated `edp` versioning is tagged `build/<version>` but deployed from the plain image tag. | application team first, platform team if builds succeed without tagging or the project uses `edp` versioning |
-| Health `Progressing` for long, or `Degraded` | Pods do not become ready. Continue at step 7 with pod events and logs. | application team, unless the events point at pull secrets, quotas, or nodes |
-| Healthy and `OutOfSync` | Live state drifted from Git, often a manual change. | whoever changed it |
+| `ComparisonError` saying a target revision other than `NaN` or `build/NaN` cannot be resolved | The version has no matching Git tag: the build did not finish, or the version string is wrong. For `semver` the revision is `build/<version>`, otherwise the image tag. A project on the deprecated `edp` versioning is tagged `build/<version>` but deployed from the plain image tag. | application team first, platform team if builds succeed without tagging or the project uses `edp` versioning |
+| Health `progressing` for long, or `degraded` | Pods do not become ready. Continue at step 7 with pod events and logs, as `krci-debug-environment` describes. | application team, unless the events point at pull secrets, quotas, or nodes |
+| Health `healthy` and sync `outofsync` | Live state differs from Git: a manual change, or a sync that failed, so the previous version may still run. | whoever changed it, or the owner of the failed sync |
 | Operation `Failed` mentioning an admission webhook or an internal error | The cluster rejected the apply. | platform team |
 
 ## Verdict format
 
 ```text
-Owner: application team | platform team | external system
+Owner: application team | platform team | external system | none
 Cause: <one sentence naming the failed handoff>
 Evidence: <commands run and the decisive output lines>
 Next step: <the fix, or an escalation bundle when the owner is not the user>
