@@ -86,7 +86,7 @@ krci env get <deployment> <environment> -o json | jq "$unwrap | .projects[] | {n
 
 | Command | Payload after normalizing |
 |---|---|
-| `project list` | array of `{name, namespace, type, language, buildTool, framework, gitServer, status, available}` |
+| `project list` | array of `{name, namespace, type, language, buildTool, framework, gitServer, gitUrl, status, available}` |
 | `project deployments <project>` | `{project, rows[]}`, rows of `{deployment, env, deployed, status, sync, version, imageTag, imageDigest, cluster, namespace, triggerType, deployedAt, ingressUrls, argocdUrl, conditions, operation}` |
 | `project versions <project>` | `{project, streams[]}`, streams of `{branch, image, versions[]}`, versions of `{name, created, digest?}`, newest first. `versions` is empty for a branch that was never built |
 | `env list` | `stages[]` of `{deployment, env, cluster, namespace, triggerType, status, order}` |
