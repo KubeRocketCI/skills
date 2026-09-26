@@ -128,9 +128,9 @@ Task skills are named `krci-<verb>-<object>`. When one matches the request, run 
 
 | Role | Skills |
 |---|---|
-| BA, PO, PM | none yet |
-| Developer | `krci-debug-environment`: why an environment is unhealthy, out of sync, or shows nothing deployed, and who owns the fix |
-| QA | `krci-debug-environment`: why an environment is unhealthy, out of sync, or shows nothing deployed, and who owns the fix |
+| BA, PO, PM | `krci-trace-story`: the implementation status of a story by its tracker key, per project — whether it merged, its first version, and which environments run it |
+| Developer | `krci-debug-environment`: why an environment is unhealthy, out of sync, or shows nothing deployed, and who owns the fix; `krci-trace-story`: the implementation status of a story by its tracker key, per project — whether it merged, its first version, and which environments run it |
+| QA | `krci-debug-environment`: why an environment is unhealthy, out of sync, or shows nothing deployed, and who owns the fix; `krci-trace-story`: the implementation status of a story by its tracker key, per project — whether it merged, its first version, and which environments run it |
 | DevOps | `krci-debug-environment`: why an environment is unhealthy, out of sync, or shows nothing deployed, and who owns the fix |
 
 ## Further reading

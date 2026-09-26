@@ -7,7 +7,7 @@ Planned names are proposals and change with the eval cases. A planned skill beco
 | Stage | Roles | Skill | Status | Settles |
 |---|---|---|---|---|
 | all | all | `krci-overview` | available | Lifecycle, roles, vocabulary, tool tiers, preflight, safety contract, ownership verdict. |
-| plan | ba, po, pm | `krci-trace-ticket` | planned | Which branch, build, and version carry a ticket, and in which environments that version runs. |
+| plan | ba, po, pm, dev, qa | `krci-trace-story` | available | The implementation status of a story by its tracker key, per project — whether it merged, its first version, and which environments run it. |
 | code | dev | `krci-debug-review` | planned | Why the review run of a pull request failed, including code quality findings. |
 | build | dev | `krci-debug-build` | planned | Why a build run failed, and who owns the fix. |
 | build | devops | `krci-add-pipeline` | planned | How a custom pipeline is written and registered for a project. |
@@ -22,6 +22,6 @@ Planned names are proposals and change with the eval cases. A planned skill beco
 | Role | Stages with skills |
 |---|---|
 | BA, PO, PM | plan, deploy |
-| Developer | code, build, deploy, operate |
-| QA | test, deploy, operate |
+| Developer | plan, code, build, deploy, operate |
+| QA | plan, test, deploy, operate |
 | DevOps | build, test, deploy, operate |

@@ -77,6 +77,7 @@ Grouped by delivery stage. [docs/skill-map.md](docs/skill-map.md) shows the plan
 | Stage | Skill | Roles | Access | What it is for |
 |---|---|---|---|---|
 | all | [`krci-overview`](plugins/krci/skills/krci-overview/SKILL.md) | all | read-only | Foundation and router for every other skill: delivery lifecycle, roles, platform vocabulary, which tool answers which question, session preflight, the safety contract, the ownership verdict. |
+| plan | [`krci-trace-story`](plugins/krci/skills/krci-trace-story/SKILL.md) | ba, po, pm, dev, qa | read-only | The implementation status of a story by its tracker key, per project — whether it merged, its first version, and which environments run it. |
 | operate | [`krci-debug-environment`](plugins/krci/skills/krci-debug-environment/SKILL.md) | dev, qa, devops | read-only | Why an environment is unhealthy, out of sync, or shows nothing deployed, and who owns the fix. |
 
 ## Update
