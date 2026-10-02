@@ -2,7 +2,7 @@
 name: krci-verb-object
 description: <What the skill covers, one clause>. Use when <triggers, in the words users type>. Not for <neighboring intent> (use <sibling-skill>).
 license: Apache-2.0
-compatibility: <Required tools, for example the krci CLI v0.16.0 or later with a portal session>. <Optional tools>. Written against KubeRocketCI <version>.
+compatibility: <Required tools, for example the krci CLI v0.18.0 or later with a portal session>. <Optional tools>. Written against KubeRocketCI <version>.
 metadata:
   access: read-only
   roles: <comma-separated: ba, po, pm, dev, qa, devops, or all>
@@ -13,7 +13,7 @@ metadata:
 
 <Two sentences: the question this skill settles and for whom.>
 
-Vocabulary, tool tiers, the safety contract, and the ownership verdict come from `krci-overview`. Run its preflight before the first krci or kubectl call.
+Vocabulary, tool tiers, the safety contract, and the ownership verdict come from `krci-overview`. Load it before you answer, also when you run no command: it defines the verdict and the owners it allows. Run its preflight before the first krci or kubectl call.
 
 ## Verdict
 

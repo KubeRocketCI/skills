@@ -2,7 +2,7 @@
 name: krci-overview
 description: Foundation for delivering software on KubeRocketCI (KRCI, formerly EDP), from ticket to production, for every role. Use when a request mentions KubeRocketCI, krci, or the portal; projects or codebases, branches, builds, or Tekton pipeline runs; deployments, environments or stages, or Argo CD applications of the platform; quality gates, autotests, or promotion; where a ticket's change is deployed; a custom pipeline or the chart in deploy-templates/; and before running krci or kubectl against a tenant. Covers the lifecycle, roles, vocabulary, tools, preflight, safety contract, and ownership verdict.
 license: Apache-2.0
-compatibility: Requires a shell and the krci CLI v0.16.0 or later with a portal session. kubectl under the user's own RBAC and a Git provider CLI are optional. Written against KubeRocketCI 3.15.
+compatibility: Requires a shell and the krci CLI v0.18.0 or later with a portal session. kubectl under the user's own RBAC and a Git provider CLI are optional. Written against KubeRocketCI 3.15.
 metadata:
   access: read-only
   roles: all
@@ -19,7 +19,7 @@ Names, namespaces, and command syntax are read from the platform. Do not constru
 
 Run it before the first krci or kubectl call of a session. Answering a question from this skill alone needs no preflight.
 
-1. Run `krci version`, then `krci auth status`. The session is valid when the command exits 0. Without a valid session it exits 1 and names the reason on standard error.
+1. Run `krci version`. The skills need 0.18.0 or later: an older krci answers `unknown flag` to flags they use and leaves out fields they read, so the user has to update it first. Then run `krci auth status`. The session is valid when it exits 0. Without a valid session it exits 1 and names the reason on standard error.
 2. Without a session, ask the user to run `krci auth login --portal-url <portal-url>`. It is a browser flow that an agent cannot complete. Headless setup is in [references/tooling.md](references/tooling.md).
 3. kubectl is optional. If present, check who you are and what you may do with `kubectl auth whoami` and `kubectl auth can-i --list -n <platform-namespace>` before relying on it.
 4. The platform namespace comes from the `namespace` field of `krci project list -o json`, or from the user.
@@ -31,7 +31,7 @@ Run it before the first krci or kubectl call of a session. Answering a question 
 | plan | A ticket in the team's tracker. The platform neither reads nor writes the tracker. The trace is the ticket key that the team puts into branch names, commit messages, and pull request titles. | none | the agent's own tracker integration, if one is configured |
 | code | A branch and a pull request in the project repository. Every pull request starts a review pipeline run. | `CodebaseBranch`, `PipelineRun` of type `review` | `krci pipelinerun list --project <project> --pr <number>` |
 | build | A merge starts the build pipeline run: tests, code quality and dependency scans, image push, Git tag. The version is added to the branch's `CodebaseImageStream`. | `PipelineRun` of type `build` | `krci pipelinerun list --project <project> --type build`, `krci sonar`, `krci sca` |
-| deploy | A version is deployed to an environment from the portal, or automatically when the environment's trigger type is `Auto` or `Auto-stable`. The deploy pipeline run points the Argo CD Application at that version, and Argo CD syncs the chart from `deploy-templates/`. | `Stage`, `PipelineRun` of type `deploy`, Argo CD `Application` | `krci env get <deployment> <environment>`, `krci project deployments <project>` |
+| deploy | A version is deployed to an environment from the portal, or automatically when the environment's trigger type is `Auto` or `Auto-stable`. The deploy pipeline run points the Argo CD Application at that version, and Argo CD syncs the chart from `deploy-templates/`. | `Stage`, `PipelineRun` of type `deploy`, Argo CD `Application` | `krci env get <deployment> <environment>`, `krci project deployments <project>`, `krci pipelinerun list --deployment <deployment> --env <environment> --type deploy` |
 | test | The environment's quality gates run inside the deploy pipeline run: a manual approval (`ApprovalTask`) or an autotest project run against the environment. `tests` pipeline runs execute autotests outside a deploy. | `Stage.spec.qualityGates`, `ApprovalTask` | `qualityGates[]` of `krci env get` |
 | operate | Environments are ordered by `Stage.spec.order`, and promotion deploys a verified version to the next one. Workloads run in `Stage.spec.namespace` and are reconciled by Argo CD. | `Stage`, Argo CD `Application` | `krci env list`, kubectl in the environment namespace |
 
@@ -69,22 +69,24 @@ The API group is `v2.edp.epam.com`. The platform was formerly called EDP, so `ed
 2. **kubectl when krci cannot answer**: pod logs and events, and status messages of resources that krci does not show. Read-only verbs, the user's RBAC.
 3. **The Git provider** for pull requests, branches, tags, and values in the GitOps repository.
 
-Command groups are `project`, `deployment`, `env`, `pipelinerun` (alias `run`), `sca`, `sonar`, `auth`, `version`. Each group goes `list` then `get`. Confirm flags with `krci <group> <verb> --help` instead of inventing them. To find why a run failed, start here. It returns the failed task, step, exit code, and log tail of the most recent finished match:
+Command groups are `project`, `deployment`, `env`, `pipelinerun` (alias `run`), `sca`, `sonar`, `auth`, `version`. Each group goes `list` then `get`. Confirm flags with `krci <group> <verb> --help` instead of inventing them. To find why a run failed, start here. It returns the failed task, step, exit code, and log tail of the newest failed run:
 
 ```bash
 krci pipelinerun list --project <project> --status failed --reason -o json
 ```
 
+Deploy and clean runs carry no project: select them with `--deployment <deployment> --env <environment>` in place of `--project`. Whether a deploy went through is read from that run: its task `deploy-app` syncs the applications and then waits until they are healthy. The sync that `krci env get` reports does not tell. A run that hit its timeout has the status `Timeout`: `--status timeout` finds it, `--status failed` does not. To wait for a run that is still running, use `krci pipelinerun get <run> --wait` instead of polling: it exits 0 only when the run succeeded. Details are in [references/tooling.md](references/tooling.md).
+
 ## JSON output
 
-Some commands wrap the payload as `{"schemaVersion": "1", "data": ...}` and others print it bare. Check the exit code first: a failed enveloped command prints `{"schemaVersion": "1", "error": {"message": ...}}` and exits 1. Then normalize before reading fields:
+Some commands wrap the payload as `{"schemaVersion": "1", "data": ...}` and others print it bare. Check the exit code first: a failed enveloped read command prints `{"schemaVersion": "1", "error": {"message": ...}}` and exits 1. Then normalize before reading fields:
 
 ```bash
 krci env get <deployment> <environment> -o json |
   jq 'if type == "object" and has("schemaVersion") then .data else . end'
 ```
 
-Applications of an environment are under `projects[]` (`name`, `status`, `sync`, `version`, `conditions`, `operation`). Shapes per command, and the shapes of a project that was never deployed, was cleaned, or has no Application, are in [references/tooling.md](references/tooling.md).
+Applications of an environment are under `projects[]` (`name`, `status`, `sync`, `version`, `conditions`, `operation`). Pipeline runs are under `pipelineRuns[]` (`name`, `status`, `type`, `startTime`, `duration`, `results`). A run has no version field: what it built or rolled out is in its `results`, which only a run still in the cluster carries. Shapes per command, and the shapes of a project that was never deployed, was cleaned, or has no Application, are in [references/tooling.md](references/tooling.md).
 
 ## Safety contract
 
