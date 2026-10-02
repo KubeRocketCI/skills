@@ -15,7 +15,7 @@ Three tiers, tried in this order: the krci CLI, kubectl, the Git provider. Skill
 
 ## krci CLI
 
-Verified against krci `v0.16.0`. The CLI grows quickly, so `krci <group> <verb> --help` is the authority.
+Verified against krci `v0.18.0`. The CLI grows quickly, so `krci <group> <verb> --help` is the authority.
 
 krci talks to the KubeRocketCI portal over HTTPS with the user's OIDC token. It never touches the Kubernetes API, so it works without a kubeconfig and for environments on remote clusters.
 
@@ -26,20 +26,26 @@ Install with `brew tap KubeRocketCI/homebrew-tap && brew install krci`, or take 
 | `project` (`proj`) | `list`, `get <project>`, `deployments <project>`, `versions <project>`, `build <project>` | Which projects exist, their status, where each version is deployed, which versions were built per branch. `build` starts the build pipeline of a branch the way the portal's Build button does, and changes state. |
 | `deployment` (`dp`) | `list`, `get <deployment>` | Deployment flows, their projects and environments, and the status message of each. |
 | `env` (`e`) | `list`, `get <deployment> <environment>` | Health, sync, version, Argo CD conditions and last sync operation, ingress URLs, quality gates, target cluster and namespace. |
-| `pipelinerun` (`run`) | `list`, `get <run>`, `start <pipeline>` | Run history and failure diagnosis. `start` changes state. |
+| `pipelinerun` (`run`) | `list`, `get <run>`, `start <pipeline>` | Run history, failure diagnosis, waiting for a run to end, and the results a run produced. `start` changes state. |
 | `sonar` | `list`, `get`, `gate`, `issues` | Quality gate and issues per project, branch, or pull request. |
 | `sca` | `list`, `get`, `components`, `findings` | Dependency-Track components and vulnerabilities. |
 | `auth` | `login`, `status`, `logout` | Session. |
 
 The `list` verbs of `project`, `deployment`, `env`, and `pipelinerun` also answer to `ls`.
 
-Filters of `pipelinerun list`: `--project`, `--pr`, `--branch`, `--author`, `--type`, `--status`. `--type` matches the `app.edp.epam.com/pipelinetype` label exactly: `review`, `build`, `deploy`, `clean`, `security`, `tests`, `release`. `--status` takes `succeeded`, `failed`, `running`, `timeout`, or `cancelled`, in any case.
+Filters of `pipelinerun list`: `--project`, `--pr`, `--branch`, `--author`, `--type`, `--status`, `--deployment`, `--env`. `--type` matches the `app.edp.epam.com/pipelinetype` label exactly: `review`, `build`, `deploy`, `clean`, `security`, `tests`, `release`. `--status` takes `succeeded`, `failed`, `running`, `timeout`, or `cancelled`, in any case. A run that hit its timeout is `timeout`, not `failed`. `--deployment <deployment>` and `--env <environment>`, which works only together with `--deployment`, select deploy and clean runs, see [Deploy history of one environment](#deploy-history-of-one-environment).
 
-With `--reason`, the most recent finished match is diagnosed, so a run name is not needed up front. Running runs are skipped. The failed task's log is cut to its last 25 lines. `--logs` appends the full log.
+With `--reason`, the newest match is diagnosed, so a run name is not needed up front. A newest match that is still running, or that ended a moment ago and is not in Tekton Results yet, comes back without `tasks`: add `--status failed` for the newest failed run, or wait for the run. The failed task's log is cut to its last 25 lines. `--logs` in place of `--reason` returns the full log of that run in `logs`. With both flags only the diagnosis comes back.
+
+`pipelinerun get <run> --wait` blocks until the run ends and then prints it, with `--reason` or `--logs` when given. It exits 0 only when the run succeeded: a failed, cancelled, or timed-out run is still printed, and the command exits 1. `--timeout` (default `1h`, only with `--wait`) limits the wait, and a wait that runs out prints nothing and exits 1. Use it instead of polling `get` or `list` in a loop.
+
+A run that is still in the cluster carries `results`, its pipeline results by name. `VCS_TAG` of a succeeded build run is the Git tag of the version it produced: `build/<version>` for a `semver` project, the version itself with `default` versioning. A build that failed after its `get-version` task carries `VCS_TAG` too, although the tag may never have been pushed, so read `status` first. `APPLICATIONS_PAYLOAD` of a deploy run holds the versions it rolled out. A run read back from the history has no `results`: the versions of a branch are then in `krci project versions <project>`.
 
 `sonar list`, `sonar issues`, `sca list`, and `sca components` page with `--page` (from 1) and `--page-size` (at most 500).
 
 `project build <project> [--branch <branch>]` and `pipelinerun start <pipeline>` accept `--dry-run`, which prints the PipelineRun that would be created, as YAML or with `-o json`, and starts nothing. Show it to the user before asking to confirm the real run.
+
+`project build` needs the build endpoint of the portal. The portal of KubeRocketCI 3.15.0 does not have it, and krci answers `portal has no endpoint for this command (…); upgrade the portal`, also with `--dry-run`. On such a platform a build starts from a merge or from the Build button of the portal.
 
 ## Sessions
 
@@ -61,7 +67,7 @@ Headless use, for CI or a remote agent, replaces the login with environment vari
 
 | Variable | Meaning |
 |---|---|
-| `KRCI_PORTAL_URL` | Portal base URL, HTTPS only. Required. |
+| `KRCI_PORTAL_URL` | Portal base URL. Required. `krci auth login` accepts only an HTTPS URL. |
 | `KRCI_TOKEN` | Bearer token, used as is, without refresh. |
 | `KRCI_CLUSTER_NAME`, `KRCI_NAMESPACE` | Cluster name and platform namespace. Required: without a login nothing discovers them, and every portal command refuses to run without them. |
 | `KRCI_KEYRING_BACKEND` | `keyring` (default) or `file`. Use `file` where no OS keyring exists, as in containers and CI. |
@@ -95,12 +101,14 @@ krci env get <deployment> <environment> -o json | jq "$unwrap | .projects[] | {n
 | `env get` `projects[]` | `{name, status, sync, version, imageTag, imageDigest, ingressUrls, argocdUrl, deployedAt, valuesOverride, conditions[], operation}` |
 | `projects[].conditions[]` | `{type, message, lastTransitionTime}`, the Argo CD Application conditions, such as `ComparisonError` |
 | `projects[].operation` | `{phase, message, startedAt, finishedAt}` of the last sync, `null` until the first sync. `phase` is `Running`, `Succeeded`, `Failed`, `Error`, or `Terminating` |
-| `pipelinerun list` | `{pipelineRuns[], logs?, tasks?}`. With `--reason`, `tasks[]` carries `{name, status, duration, failedStep, exitCode, message, logs}` |
+| `pipelinerun list`, `pipelinerun get` | `{pipelineRuns[], logs?, tasks?}`, newest run first, `get` with its one run. With `--reason`, `tasks[]` carries `{name, status, duration, failedStep, exitCode, message, logs}` |
+| `pipelineRuns[]` | `{name, portalUrl, status, pipeline, project, type, branch, prNumber, prUrl, author, startTime, duration, targetBranch, commitSha, deployment, env, results}`. `status` is `Running`, `Succeeded`, `Failed`, `Timeout`, or `Cancelled`, and empty for a run that has not started yet. A field that does not apply is left out. A deploy or clean run has an empty `project` and carries `deployment` and `env` |
+| `pipelineRuns[].results` | pipeline results by name, only while the run is in the cluster. `VCS_TAG` on a build run that got past `get-version`, whatever its `status`. `APPLICATIONS_PAYLOAD` on a deploy run whose `deploy-app` task succeeded: a JSON string, `fromjson` turns it into `{<project>: {imageTag, imageDigest?, customValues?}}`, cut to the projects that fit into the result size |
 | `sonar list` | `{projects[], paging{pageIndex, pageSize, total}}` |
 | `sca list` | `{items[], totalCount}` |
 | `auth status` | `{authenticated, user?, name?, groups[], expiresAt}`. Without a valid session it exits 1 and prints the error envelope |
 
-`status` and `sync` of a project are lowercase: `healthy`, `progressing`, `degraded`, `suspended`, `missing`, `unknown`, and `synced`, `outofsync`, `unknown`. `version` is the version the Application points at, and `deployedAt` is when the last sync finished, whatever its `operation.phase`. Neither proves that the version runs.
+`status` and `sync` of a project are lowercase: `healthy`, `progressing`, `degraded`, `suspended`, `missing`, `unknown`, and `synced`, `outofsync`, `unknown`. `version` is the version the Application points at, and `deployedAt` is when the last sync finished, whatever its `operation.phase`. Neither proves that the version runs, and `operation.phase` `Succeeded` says only that Argo CD applied the manifests. Whether a deploy went through is read from its run, see [Deploy history of one environment](#deploy-history-of-one-environment).
 
 A project of an environment shows one of three shapes when it runs nothing:
 
@@ -114,29 +122,27 @@ SonarQube measures are strings, convert with `tonumber` before comparing.
 
 ## Errors and empty results
 
-Exit code 0 means the command worked, also when the result is empty. Exit code 1 covers every failure. Check the exit code before parsing: with `-o json`, an enveloped command prints `{"schemaVersion": "1", "error": {"message": ...}}` on standard output, so the normalizer above yields `null` instead of failing.
+Exit code 0 means the command worked, also when the result is empty. Exit code 1 covers every failure, and a `pipelinerun get --wait` whose run did not succeed. Check the exit code before parsing: with `-o json`, an enveloped read command prints `{"schemaVersion": "1", "error": {"message": ...}}` on standard output, so the normalizer above yields `null` instead of failing. `project build` and `pipelinerun start` print a failure on standard error only.
 
-Read commands turn HTTP status codes into plain messages. `project build` and `pipelinerun start` also report a stable reason from the portal, such as `codebase_branch_not_found`, `build_pipeline_not_configured`, or `build_in_progress`.
+Read commands turn HTTP status codes into plain messages. `project build` and `pipelinerun start` turn the reason the portal gives into one line, such as `branch '<branch>' of project '<project>' not found` or `a build is already running for branch '<branch>' of project '<project>'`.
 
-An unknown `--type` or `--status` value is not rejected. It returns an empty list with exit code 0, which looks like "nothing ran". Use only the values listed above.
+An unknown `--type` or `--status` value is not rejected. An unknown `--type` returns an empty list with exit code 0, which looks like "nothing ran", and so does a `--deployment` or `--env` name that does not exist. An unknown `--status` is ignored for the history, so finished runs of every status come back. Use only the values listed above.
 
 ## Deploy history of one environment
 
-Deploy runs carry no `app.edp.epam.com/codebase` label, so `krci pipelinerun list --project <project> --type deploy` is always empty. List deploy runs and select those of the environment by name:
+Deploy and clean runs carry no `app.edp.epam.com/codebase` label, so `krci pipelinerun list --project <project> --type deploy` is always empty. Select them by deployment and environment, with the names `krci env get` takes:
 
 ```bash
-krci pipelinerun list --type deploy -o json |
-  jq --arg d "<deployment>" --arg e "<environment>" \
-    '.pipelineRuns[] | select(.name | test("^deploy-(with-approve-|diff-approve-)?\($d)-\($e)-(auto-)?[a-z0-9]+$"))'
+krci pipelinerun list --deployment <deployment> --env <environment> --type deploy -o json
 ```
 
-A deploy started from the portal is named `deploy-<deployment>-<environment>-<suffix>`. An automatic deploy is named after the environment's trigger template: `deploy-`, `deploy-with-approve-`, `deploy-diff-approve-`, or `deploy-…-auto-` for autotests. A custom trigger template can use another prefix. The list holds the runs still in the cluster plus the 10 most recent deploy runs from Tekton Results, across all environments.
+The newest run comes first. Without `--type deploy` the clean runs of the environment are listed too, and `--deployment` alone lists the runs of every environment of the flow. The list holds the runs still in the cluster plus the 10 most recent matches from Tekton Results. Add `--reason` for the tasks of the newest run, with the step and log tail of the one that failed.
 
-Runs that are still in the cluster carry the label `app.edp.epam.com/cdstage=<deployment>-<environment>`, which kubectl can select exactly:
+The deploy itself is the task `deploy-app` of the run. It points the applications at the version, syncs them, and then waits for them to become healthy, so it fails when the sync fails and also when the applications do not come up. In the second case Argo CD still reports the sync as `Succeeded`. The task has one step, `wait-for-deploy`, so the log tail says which part failed. The other tasks of the run are the environment's quality gates, such as an approval or autotests, and the promotion: a run that failed or timed out in one of them after `deploy-app` succeeded did deploy, and a `Running` run may be waiting for an approval.
 
-```bash
-kubectl get pipelineruns -n <platform-namespace> -l app.edp.epam.com/cdstage=<deployment>-<environment> --sort-by=.metadata.creationTimestamp
-```
+The versions a run rolled out are in its `results.APPLICATIONS_PAYLOAD` while the run is in the cluster. For an older run, `krci pipelinerun get <run> --logs` prints the whole payload in the `new_tags=` line of the `deploy-app` task.
+
+Finished runs are matched by the labels `app.edp.epam.com/cdpipeline` and `app.edp.epam.com/cdstage`, which Tekton Results has to keep for each run. The KubeRocketCI add-ons configure that, see [Install Tekton](https://docs.kuberocketci.io/docs/operator-guide/install-tekton). Runs archived without the labels stay unmatched: `--deployment` and `--env` then find only the runs still in the cluster, and `--type deploy` shows the finished deploy runs with no `deployment` and `env`. Tell those apart by name: a deploy from the portal is named `deploy-<deployment>-<environment>-<suffix>`, an automatic deploy after the environment's trigger template, `deploy-`, `deploy-with-approve-`, `deploy-diff-approve-`, or `deploy-…-auto-` for autotests, and a custom trigger template can use another prefix.
 
 The versions a project had in an environment, including runs that Tekton Results no longer holds, are in the history of its Argo CD Application. Each entry has `deployedAt` and the `image.tag` Helm parameter:
 
@@ -150,7 +156,7 @@ kubectl get applications.argoproj.io <deployment>-<environment>-<project> -n <pl
 | Need | Tier that provides it |
 |---|---|
 | Pod logs and events of a deployed application | kubectl in the environment namespace |
-| Per-resource diff between Git and the cluster | kubectl on the Application resource, or the Argo CD link from `krci env get` |
+| Per-resource diff between Git and the cluster | kubectl on the Application resource, or the Application's page in Argo CD: `argocdUrl` of `krci env get` is its path on the Argo CD server |
 | Status message of a Codebase or CodebaseBranch | kubectl on the resource, see the fields in [vocabulary.md](vocabulary.md) |
 | Deploying, promoting, approving a quality gate | The portal. A skill that does this through the cluster says so and passes the confirmation gate. |
 

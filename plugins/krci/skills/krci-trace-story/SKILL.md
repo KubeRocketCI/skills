@@ -2,7 +2,7 @@
 name: krci-trace-story
 description: The implementation status of a story by its tracker key, per project — whether it merged, its first version, and which environments run it. Use when asked about the status or progress of a story or ticket key, which version contains it, or its deployment. Not for why an environment itself is unhealthy or empty, which `krci-debug-environment` covers.
 license: Apache-2.0
-compatibility: Requires the krci CLI v0.16.0 or later with a portal session, and git with read access to the project repositories. A tracker integration is optional. Written against KubeRocketCI 3.15.
+compatibility: Requires the krci CLI v0.18.0 or later with a portal session, and git with read access to the project repositories. A tracker integration is optional. Written against KubeRocketCI 3.15.
 metadata:
   access: read-only
   roles: ba, po, pm, dev, qa
