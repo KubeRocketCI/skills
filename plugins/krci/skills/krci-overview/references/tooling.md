@@ -45,7 +45,7 @@ A run that is still in the cluster carries `results`, its pipeline results by na
 
 `project build <project> [--branch <branch>]` and `pipelinerun start <pipeline>` accept `--dry-run`, which prints the PipelineRun that would be created, as YAML or with `-o json`, and starts nothing. Show it to the user before asking to confirm the real run.
 
-`project build` needs the build endpoint of the portal. The portal of KubeRocketCI 3.15.0 does not have it, and krci answers `portal has no endpoint for this command (…); upgrade the portal`, also with `--dry-run`. On such a platform a build starts from a merge or from the Build button of the portal.
+`project build` needs the build endpoint of the portal, which arrived after KubeRocketCI 3.15.0. On 3.15.0 the portal does not have it, and krci answers `portal has no endpoint for this command (…); upgrade the portal`, also with `--dry-run`. On such a platform a build starts from a merge or from the Build button of the portal.
 
 ## Sessions
 
@@ -138,7 +138,7 @@ krci pipelinerun list --deployment <deployment> --env <environment> --type deplo
 
 The newest run comes first. Without `--type deploy` the clean runs of the environment are listed too, and `--deployment` alone lists the runs of every environment of the flow. The list holds the runs still in the cluster plus the 10 most recent matches from Tekton Results. Add `--reason` for the tasks of the newest run, with the step and log tail of the one that failed.
 
-The deploy itself is the task `deploy-app` of the run. It points the applications at the version, syncs them, and then waits for them to become healthy, so it fails when the sync fails and also when the applications do not come up. In the second case Argo CD still reports the sync as `Succeeded`. The task has one step, `wait-for-deploy`, so the log tail says which part failed. The other tasks of the run are the environment's quality gates, such as an approval or autotests, and the promotion: a run that failed or timed out in one of them after `deploy-app` succeeded did deploy, and a `Running` run may be waiting for an approval.
+The deploy itself is the task `deploy-app` of the run. It points the applications at the version, syncs them, and then waits for them to become healthy, so it fails when the sync fails and also when the applications do not come up. In the second case Argo CD still reports the sync as `Succeeded`. The task has one step, `wait-for-deploy`, so the log tail says which part failed. The other tasks of the run are `pre-deploy` and `post-deploy`, the environment's quality gates, such as `approve` or `init-autotests` and `wait-for-autotests`, and `promote-images`: a run that failed or timed out in a task after `deploy-app` did deploy, and a `Running` run may be waiting for an approval.
 
 The versions a run rolled out are in its `results.APPLICATIONS_PAYLOAD` while the run is in the cluster. For an older run, `krci pipelinerun get <run> --logs` prints the whole payload in the `new_tags=` line of the `deploy-app` task.
 

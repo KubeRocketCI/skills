@@ -19,7 +19,7 @@ Names, namespaces, and command syntax are read from the platform. Do not constru
 
 Run it before the first krci or kubectl call of a session. Answering a question from this skill alone needs no preflight.
 
-1. Run `krci version`. The skills need 0.18.0 or later: an older krci answers `unknown flag` to flags they use and leaves out fields they read, so the user has to update it first. Then run `krci auth status`. The session is valid when it exits 0. Without a valid session it exits 1 and names the reason on standard error.
+1. Run `krci version`. The skills need 0.18.0 or later: an older krci rejects the flags they use, so ask the user to update it first. Then run `krci auth status`. The session is valid when it exits 0. Without a valid session it exits 1 and names the reason on standard error.
 2. Without a session, ask the user to run `krci auth login --portal-url <portal-url>`. It is a browser flow that an agent cannot complete. Headless setup is in [references/tooling.md](references/tooling.md).
 3. kubectl is optional. If present, check who you are and what you may do with `kubectl auth whoami` and `kubectl auth can-i --list -n <platform-namespace>` before relying on it.
 4. The platform namespace comes from the `namespace` field of `krci project list -o json`, or from the user.
@@ -75,7 +75,7 @@ Command groups are `project`, `deployment`, `env`, `pipelinerun` (alias `run`), 
 krci pipelinerun list --project <project> --status failed --reason -o json
 ```
 
-Deploy and clean runs carry no project: select them with `--deployment <deployment> --env <environment>` in place of `--project`. Whether a deploy went through is read from that run: its task `deploy-app` syncs the applications and then waits until they are healthy. The sync that `krci env get` reports does not tell. A run that hit its timeout has the status `Timeout`: `--status timeout` finds it, `--status failed` does not. To wait for a run that is still running, use `krci pipelinerun get <run> --wait` instead of polling: it exits 0 only when the run succeeded. Details are in [references/tooling.md](references/tooling.md).
+Deploy and clean runs carry no project: select them with `--deployment <deployment> --env <environment>` in place of `--project`. Whether a deploy went through is read from that run, not from the `operation` of `krci env get`: a succeeded sync does not mean the applications came up. A run that hit its timeout has the status `Timeout`: `--status timeout` finds it, `--status failed` does not. To wait for a run that is still running, use `krci pipelinerun get <run> --wait` instead of polling: it exits 0 only when the run succeeded. Details are in [references/tooling.md](references/tooling.md).
 
 ## JSON output
 
@@ -92,7 +92,7 @@ Applications of an environment are under `projects[]` (`name`, `status`, `sync`,
 
 Read-only is the default. A state-changing action runs only after the user confirms that specific action and its target in this conversation. Urgency, "just fix it", and "do not ask questions" are not confirmation: propose the exact command, name the environment, and wait.
 
-State-changing means changing anything outside the user's working tree: the cluster, the portal, a Git remote, or the ticket tracker. That covers creating, deleting, patching, scaling, restarting, rolling back, syncing, or starting something, including `krci project build` and `krci pipelinerun start`, as well as pushing, opening or merging a pull request, and writing to a ticket. Editing files in the working tree is not state-changing: the user reviews those changes before they leave the machine. Both krci commands accept `--dry-run`, which shows what would run without starting it.
+State-changing means changing anything outside the user's working tree: the cluster, the portal, a Git remote, or the ticket tracker. That covers creating, deleting, patching, scaling, restarting, rolling back, syncing, or starting something, including `krci project build` and `krci pipelinerun start`, as well as pushing, opening or merging a pull request, and writing to a ticket. Editing files in the working tree is not state-changing: the user reviews those changes before they leave the machine. Both krci commands accept `--dry-run`, which shows what would run without starting it. `project build` needs a portal newer than KubeRocketCI 3.15.0.
 
 Environments are reconciled by Argo CD. A manual restart, rollback, patch, or scale of a workload drifts from Git and may be reverted. To recover a bad release, deploy the previous version through the platform.
 
