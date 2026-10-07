@@ -15,7 +15,7 @@ Three tiers, tried in this order: the krci CLI, kubectl, the Git provider. Skill
 
 ## krci CLI
 
-Verified against krci `v0.18.0`. The CLI grows quickly, so `krci <group> <verb> --help` is the authority.
+Verified against krci `v0.19.0`. The CLI grows quickly, so `krci <group> <verb> --help` is the authority.
 
 krci talks to the KubeRocketCI portal over HTTPS with the user's OIDC token. It never touches the Kubernetes API, so it works without a kubeconfig and for environments on remote clusters.
 
@@ -35,7 +35,17 @@ The `list` verbs of `project`, `deployment`, `env`, and `pipelinerun` also answe
 
 Filters of `pipelinerun list`: `--project`, `--pr`, `--branch`, `--author`, `--type`, `--status`, `--deployment`, `--env`. `--type` matches the `app.edp.epam.com/pipelinetype` label exactly: `review`, `build`, `deploy`, `clean`, `security`, `tests`, `release`. `--status` takes `succeeded`, `failed`, `running`, `timeout`, or `cancelled`, in any case. A run that hit its timeout is `timeout`, not `failed`. `--deployment <deployment>` and `--env <environment>`, which works only together with `--deployment`, select deploy and clean runs, see [Deploy history of one environment](#deploy-history-of-one-environment).
 
-With `--reason`, the newest match is diagnosed, so a run name is not needed up front. A newest match that is still running, or that ended a moment ago and is not in Tekton Results yet, comes back without `tasks`: add `--status failed` for the newest failed run, or wait for the run. The failed task's log is cut to its last 25 lines. `--logs` in place of `--reason` returns the full log of that run in `logs`. With both flags only the diagnosis comes back.
+With `--reason`, the newest match is diagnosed, so a run name is not needed up front. The failed task's log is cut to its last 25 lines. `--logs` in place of `--reason` returns the full log of that run in `logs`. With both flags only the diagnosis comes back.
+
+When `--reason` has no task data to show, it leaves `tasks` out and says why in `tasksUnavailable`:
+
+| `tasksUnavailable` | The run | Next step |
+|---|---|---|
+| `run_not_finished` | is pending or still running | Wait with `krci pipelinerun get <run> --wait --reason`, or add `--status failed` to diagnose the newest failed run instead |
+| `not_indexed` | has finished, and Tekton Results has no task data for it yet | Ask again in a moment |
+| `no_tasks` | has finished without scheduling a task, for example cancelled while pending or rejected before its first task | Do not ask again: there is nothing to diagnose. Read the run's `status` |
+
+`--logs` has no such field: a run that has not finished comes back without `logs`.
 
 `pipelinerun get <run> --wait` blocks until the run ends and then prints it, with `--reason` or `--logs` when given. It exits 0 only when the run succeeded: a failed, cancelled, or timed-out run is still printed, and the command exits 1. `--timeout` (default `1h`, only with `--wait`) limits the wait, and a wait that runs out prints nothing and exits 1. Use it instead of polling `get` or `list` in a loop.
 
@@ -101,7 +111,7 @@ krci env get <deployment> <environment> -o json | jq "$unwrap | .projects[] | {n
 | `env get` `projects[]` | `{name, status, sync, version, imageTag, imageDigest, ingressUrls, argocdUrl, deployedAt, valuesOverride, conditions[], operation}` |
 | `projects[].conditions[]` | `{type, message, lastTransitionTime}`, the Argo CD Application conditions, such as `ComparisonError` |
 | `projects[].operation` | `{phase, message, startedAt, finishedAt}` of the last sync, `null` until the first sync. `phase` is `Running`, `Succeeded`, `Failed`, `Error`, or `Terminating` |
-| `pipelinerun list`, `pipelinerun get` | `{pipelineRuns[], logs?, tasks?}`, newest run first, `get` with its one run. With `--reason`, `tasks[]` carries `{name, status, duration, failedStep, exitCode, message, logs}` |
+| `pipelinerun list`, `pipelinerun get` | `{pipelineRuns[], logs?, tasks?, tasksUnavailable?}`, newest run first, `get` with its one run. With `--reason`, `tasks[]` carries `{name, status, duration, failedStep, exitCode, message, logs}`, or `tasksUnavailable` says why there are none |
 | `pipelineRuns[]` | `{name, portalUrl, status, pipeline, project, type, branch, prNumber, prUrl, author, startTime, duration, targetBranch, commitSha, deployment, env, results}`. `status` is `Running`, `Succeeded`, `Failed`, `Timeout`, or `Cancelled`, and empty for a run that has not started yet. A field that does not apply is left out. A deploy or clean run has an empty `project` and carries `deployment` and `env` |
 | `pipelineRuns[].results` | pipeline results by name, only while the run is in the cluster. `VCS_TAG` on a build run that got past `get-version`, whatever its `status`. `APPLICATIONS_PAYLOAD` on a deploy run whose `deploy-app` task succeeded: a JSON string, `fromjson` turns it into `{<project>: {imageTag, imageDigest?, customValues?}}`, cut to the projects that fit into the result size |
 | `sonar list` | `{projects[], paging{pageIndex, pageSize, total}}` |
@@ -122,11 +132,11 @@ SonarQube measures are strings, convert with `tonumber` before comparing.
 
 ## Errors and empty results
 
-Exit code 0 means the command worked, also when the result is empty. Exit code 1 covers every failure, and a `pipelinerun get --wait` whose run did not succeed. Check the exit code before parsing: with `-o json`, an enveloped read command prints `{"schemaVersion": "1", "error": {"message": ...}}` on standard output, so the normalizer above yields `null` instead of failing. `project build` and `pipelinerun start` print a failure on standard error only.
+Exit code 0 means the command worked, also when the result is empty. Exit code 1 covers every failure, and a `pipelinerun get --wait` whose run did not succeed. Check the exit code before parsing: with `-o json`, a command of the enveloped shape prints `{"schemaVersion": "1", "error": {"message": ...}}` on standard output, so the normalizer above yields `null` instead of failing. A flag or an argument that a command rejects is reported on standard error only.
 
 Read commands turn HTTP status codes into plain messages. `project build` and `pipelinerun start` turn the reason the portal gives into one line, such as `branch '<branch>' of project '<project>' not found` or `a build is already running for branch '<branch>' of project '<project>'`.
 
-An unknown `--type` or `--status` value is not rejected. An unknown `--type` returns an empty list with exit code 0, which looks like "nothing ran", and so does a `--deployment` or `--env` name that does not exist. An unknown `--status` is ignored for the history, so finished runs of every status come back. Use only the values listed above.
+An unknown `--type` value is not rejected. It returns an empty list with exit code 0, which looks like "nothing ran", and so does a `--deployment` or `--env` name that does not exist. An unknown or empty `--status` value is rejected with exit code 1, and the message lists the valid values. Use only the values listed above.
 
 ## Deploy history of one environment
 

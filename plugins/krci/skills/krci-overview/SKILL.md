@@ -2,7 +2,7 @@
 name: krci-overview
 description: Foundation for delivering software on KubeRocketCI (KRCI, formerly EDP), from ticket to production, for every role. Use when a request mentions KubeRocketCI, krci, or the portal; projects or codebases, branches, builds, or Tekton pipeline runs; deployments, environments or stages, or Argo CD applications of the platform; quality gates, autotests, or promotion; where a ticket's change is deployed; a custom pipeline or the chart in deploy-templates/; and before running krci or kubectl against a tenant. Covers the lifecycle, roles, vocabulary, tools, preflight, safety contract, and ownership verdict.
 license: Apache-2.0
-compatibility: Requires a shell and the krci CLI v0.18.0 or later with a portal session. kubectl under the user's own RBAC and a Git provider CLI are optional. Written against KubeRocketCI 3.15.
+compatibility: Requires a shell and the krci CLI v0.19.0 or later with a portal session. kubectl under the user's own RBAC and a Git provider CLI are optional. Written against KubeRocketCI 3.15.
 metadata:
   access: read-only
   roles: all
@@ -19,7 +19,7 @@ Names, namespaces, and command syntax are read from the platform. Do not constru
 
 Run it before the first krci or kubectl call of a session. Answering a question from this skill alone needs no preflight.
 
-1. Run `krci version`. The skills need 0.18.0 or later: an older krci rejects the flags they use, so ask the user to update it first. Then run `krci auth status`. The session is valid when it exits 0. Without a valid session it exits 1 and names the reason on standard error.
+1. Run `krci version`. The skills need 0.19.0 or later: an older krci rejects flags or leaves out fields they use, so ask the user to update it first. Then run `krci auth status`. The session is valid when it exits 0. Without a valid session it exits 1 and names the reason on standard error.
 2. Without a session, ask the user to run `krci auth login --portal-url <portal-url>`. It is a browser flow that an agent cannot complete. Headless setup is in [references/tooling.md](references/tooling.md).
 3. kubectl is optional. If present, check who you are and what you may do with `kubectl auth whoami` and `kubectl auth can-i --list -n <platform-namespace>` before relying on it.
 4. The platform namespace comes from the `namespace` field of `krci project list -o json`, or from the user.
@@ -75,7 +75,7 @@ Command groups are `project`, `deployment`, `env`, `pipelinerun` (alias `run`), 
 krci pipelinerun list --project <project> --status failed --reason -o json
 ```
 
-Deploy and clean runs carry no project: select them with `--deployment <deployment> --env <environment>` in place of `--project`. Whether a deploy went through is read from that run, not from the `operation` of `krci env get`: a succeeded sync does not mean the applications came up. A run that hit its timeout has the status `Timeout`: `--status timeout` finds it, `--status failed` does not. To wait for a run that is still running, use `krci pipelinerun get <run> --wait` instead of polling: it exits 0 only when the run succeeded. Details are in [references/tooling.md](references/tooling.md).
+Deploy and clean runs carry no project: select them with `--deployment <deployment> --env <environment>` in place of `--project`. Whether a deploy went through is read from that run, not from the `operation` of `krci env get`: a succeeded sync does not mean the applications came up. A run that hit its timeout has the status `Timeout`: `--status timeout` finds it, `--status failed` does not. When the answer to `--reason` has no `tasks`, its `tasksUnavailable` says why: `run_not_finished`, `not_indexed` (ask again in a moment), or `no_tasks` (the run never started a task, so do not ask again). To wait for a run that is still running, use `krci pipelinerun get <run> --wait` instead of polling: it exits 0 only when the run succeeded. Details are in [references/tooling.md](references/tooling.md).
 
 ## JSON output
 
