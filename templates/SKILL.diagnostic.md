@@ -2,7 +2,7 @@
 name: krci-verb-object
 description: <What the skill covers, one clause>. Use when <triggers, in the words users type>. Not for <neighboring intent> (use <sibling-skill>).
 license: Apache-2.0
-compatibility: <Required tools, for example the krci CLI v0.18.0 or later with a portal session>. <Optional tools>. Written against KubeRocketCI <version>.
+compatibility: <Required tools, for example the krci CLI v0.19.0 or later with a portal session>. <Optional tools>. Written against KubeRocketCI <version>.
 metadata:
   access: read-only
   roles: <comma-separated: ba, po, pm, dev, qa, devops, or all>

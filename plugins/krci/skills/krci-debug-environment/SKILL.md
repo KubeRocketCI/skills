@@ -2,7 +2,7 @@
 name: krci-debug-environment
 description: Why an environment is unhealthy, out of sync, or shows nothing deployed, and who owns the fix. Use when an environment or its Argo CD app is Degraded, Unknown, Missing, OutOfSync, or on version NaN, a sync failed, the environment failed to create, or pods crash-loop, stay Pending, or hit ImagePullBackOff. Not for a failed build or review run, or a pending quality gate, which krci-overview routes.
 license: Apache-2.0
-compatibility: Requires the krci CLI v0.18.0 or later with a portal session. kubectl under the user's own RBAC is optional and needed for pod events and logs. Written against KubeRocketCI 3.15.
+compatibility: Requires the krci CLI v0.19.0 or later with a portal session. kubectl under the user's own RBAC is optional and needed for pod events and logs. Written against KubeRocketCI 3.15.
 metadata:
   access: read-only
   roles: dev, qa, devops
