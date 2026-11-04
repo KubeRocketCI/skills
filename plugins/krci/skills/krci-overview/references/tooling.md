@@ -9,15 +9,16 @@ Three tiers, tried in this order: the krci CLI, kubectl, the Git provider. Skill
 - [JSON contract](#json-contract)
 - [Errors and empty results](#errors-and-empty-results)
 - [Deploy history of one environment](#deploy-history-of-one-environment)
+- [Pods and events of an environment](#pods-and-events-of-an-environment)
 - [What krci does not cover](#what-krci-does-not-cover)
 - [kubectl](#kubectl)
 - [Git provider](#git-provider)
 
 ## krci CLI
 
-Verified against krci `v0.19.0`. The CLI grows quickly, so `krci <group> <verb> --help` is the authority.
+Verified against krci `v0.20.0`. The CLI grows quickly, so `krci <group> <verb> --help` is the authority.
 
-krci talks to the KubeRocketCI portal over HTTPS with the user's OIDC token. It never touches the Kubernetes API, so it works without a kubeconfig and for environments on remote clusters.
+krci talks to the KubeRocketCI portal over HTTPS with the user's OIDC token. It never touches the Kubernetes API, so it works without a kubeconfig, and for environments on remote clusters except their pods and events.
 
 Install with `brew tap KubeRocketCI/homebrew-tap && brew install krci`, or take a binary from the [releases page](https://github.com/KubeRocketCI/cli/releases) (Linux and macOS on amd64 and arm64, Windows on amd64).
 
@@ -25,7 +26,7 @@ Install with `brew tap KubeRocketCI/homebrew-tap && brew install krci`, or take 
 |---|---|---|
 | `project` (`proj`) | `list`, `get <project>`, `deployments <project>`, `versions <project>`, `build <project>` | Which projects exist, their status, where each version is deployed, which versions were built per branch. `build` starts the build pipeline of a branch the way the portal's Build button does, and changes state. |
 | `deployment` (`dp`) | `list`, `get <deployment>` | Deployment flows, their projects and environments, and the status message of each. |
-| `env` (`e`) | `list`, `get <deployment> <environment>` | Health, sync, version, Argo CD conditions and last sync operation, ingress URLs, quality gates, target cluster and namespace. |
+| `env` (`e`) | `list`, `get <deployment> <environment>`, `pods <deployment> <environment>`, `events <deployment> <environment>` | Health, sync, version, Argo CD conditions and last sync operation, ingress URLs, quality gates, target cluster and namespace. `pods` and `events` show the pods and the Kubernetes events of the environment namespace, see [Pods and events of an environment](#pods-and-events-of-an-environment). |
 | `pipelinerun` (`run`) | `list`, `get <run>`, `start <pipeline>` | Run history, failure diagnosis, waiting for a run to end, and the results a run produced. `start` changes state. |
 | `sonar` | `list`, `get`, `gate`, `issues` | Quality gate and issues per project, branch, or pull request. |
 | `sca` | `list`, `get`, `components`, `findings` | Dependency-Track components and vulnerabilities. |
@@ -71,14 +72,14 @@ Check the session by the exit code. A valid session exits 0. A missing or expire
 krci auth status >/dev/null 2>&1 || echo "no krci session"
 ```
 
-Tokens refresh automatically while the refresh token is valid. There is one portal per configuration, no named contexts. The configuration lives in `~/.config/krci/config.yaml` on every operating system.
+Tokens refresh automatically while the refresh token is valid. A stored session belongs to the portal URL it was created for. A session from a krci older than 0.20.0 carries none, so after the update `krci auth status` reports `not authenticated` until the user runs `krci auth login` once. There is one portal per configuration, no named contexts. The configuration lives in `~/.config/krci/config.yaml` on every operating system.
 
 Headless use, for CI or a remote agent, replaces the login with environment variables. The token is an OIDC ID token or a Kubernetes service account token. It is supplied by the environment, never typed into a prompt or written to a file the agent creates.
 
 | Variable | Meaning |
 |---|---|
-| `KRCI_PORTAL_URL` | Portal base URL. Required. `krci auth login` accepts only an HTTPS URL. |
-| `KRCI_TOKEN` | Bearer token, used as is, without refresh. |
+| `KRCI_PORTAL_URL` | Portal base URL. Required. Every command that calls the portal accepts only `https`, or `http` for `localhost` and a loopback IP. |
+| `KRCI_TOKEN` | Bearer token, used as is, without refresh, and not bound to a portal URL. |
 | `KRCI_CLUSTER_NAME`, `KRCI_NAMESPACE` | Cluster name and platform namespace. Required: without a login nothing discovers them, and every portal command refuses to run without them. |
 | `KRCI_KEYRING_BACKEND` | `keyring` (default) or `file`. Use `file` where no OS keyring exists, as in containers and CI. |
 | `KRCI_ISSUER_URL`, `KRCI_CLIENT_ID`, `KRCI_SCOPES` | OIDC settings for `krci auth login` when the portal does not provide them. |
@@ -89,7 +90,7 @@ Every data command accepts `-o json`. Two shapes exist:
 
 | Shape | Commands |
 |---|---|
-| `{"schemaVersion": "1", "data": ...}` | `env list`, `env get`, `project deployments`, `project versions`, `auth status`, `sonar *`, `sca *`, `pipelinerun start`, `project build` |
+| `{"schemaVersion": "1", "data": ...}` | `env list`, `env get`, `env pods`, `env events`, `project deployments`, `project versions`, `auth status`, `sonar *`, `sca *`, `pipelinerun start`, `project build` |
 | bare payload | `project list`, `project get`, `deployment list`, `deployment get`, `pipelinerun list`, `pipelinerun get` |
 
 Normalize before reading fields:
@@ -111,6 +112,9 @@ krci env get <deployment> <environment> -o json | jq "$unwrap | .projects[] | {n
 | `env get` `projects[]` | `{name, status, sync, version, imageTag, imageDigest, ingressUrls, argocdUrl, deployedAt, valuesOverride, conditions[], operation}` |
 | `projects[].conditions[]` | `{type, message, lastTransitionTime}`, the Argo CD Application conditions, such as `ComparisonError` |
 | `projects[].operation` | `{phase, message, startedAt, finishedAt}` of the last sync, `null` until the first sync. `phase` is `Running`, `Succeeded`, `Failed`, `Error`, or `Terminating` |
+| `env pods` | `{deployment, env, cluster, namespace, pods[]}`, pods sorted by name, of `{name, project, status, phase, readyContainers, totalContainers, restarts, lastRestartAt, createdAt, node, owner, reason, message, conditions[], containers[]}`. `status`, `readyContainers` with `totalContainers`, and `restarts` are the `STATUS`, `READY`, and `RESTARTS` of `kubectl get pods`. `project` is `null` for a pod of no project of the deployment. `conditions[]` holds only the conditions that hold the pod back |
+| `env pods` `containers[]` | `{name, init, sidecar, image, imageID, imageDigest, ready, restarts, state, reason, message, exitCode, startedAt, finishedAt, lastTermination}`, init containers first. `state` is `waiting`, `running`, or `terminated`. `lastTermination` is `{reason, message, exitCode, startedAt, finishedAt}` of the previous run, `null` for a container that was not restarted |
+| `env events` | `{deployment, env, cluster, namespace, events[]}`, newest first, events of `{type, reason, message, involvedObject{kind, name}, count, firstSeen, lastSeen, source}` |
 | `pipelinerun list`, `pipelinerun get` | `{pipelineRuns[], logs?, tasks?, tasksUnavailable?}`, newest run first, `get` with its one run. With `--reason`, `tasks[]` carries `{name, status, duration, failedStep, exitCode, message, logs}`, or `tasksUnavailable` says why there are none |
 | `pipelineRuns[]` | `{name, portalUrl, status, pipeline, project, type, branch, prNumber, prUrl, author, startTime, duration, targetBranch, commitSha, deployment, env, results}`. `status` is `Running`, `Succeeded`, `Failed`, `Timeout`, or `Cancelled`, and empty for a run that has not started yet. A field that does not apply is left out. A deploy or clean run has an empty `project` and carries `deployment` and `env` |
 | `pipelineRuns[].results` | pipeline results by name, only while the run is in the cluster. `VCS_TAG` on a build run that got past `get-version`, whatever its `status`. `APPLICATIONS_PAYLOAD` on a deploy run whose `deploy-app` task succeeded: a JSON string, `fromjson` turns it into `{<project>: {imageTag, imageDigest?, customValues?}}`, cut to the projects that fit into the result size |
@@ -136,7 +140,7 @@ Exit code 0 means the command worked, also when the result is empty. Exit code 1
 
 Read commands turn HTTP status codes into plain messages. `project build` and `pipelinerun start` turn the reason the portal gives into one line, such as `branch '<branch>' of project '<project>' not found` or `a build is already running for branch '<branch>' of project '<project>'`.
 
-An unknown `--type` value is not rejected. It returns an empty list with exit code 0, which looks like "nothing ran", and so does a `--deployment` or `--env` name that does not exist. An unknown or empty `--status` value is rejected with exit code 1, and the message lists the valid values. Use only the values listed above.
+An unknown `--type` value, or a well-formed `--deployment` or `--env` name that does not exist, returns an empty list with exit code 0, which looks like "nothing ran". A malformed name, `--env` without `--deployment`, and an unknown or empty `--status` value exit with code 1, and the `--status` message lists the valid values. Use only the values listed above.
 
 ## Deploy history of one environment
 
@@ -161,11 +165,20 @@ kubectl get applications.argoproj.io <deployment>-<environment>-<project> -n <pl
   -o jsonpath='{range .status.history[*]}{.deployedAt}{"\t"}{.source.helm.parameters[?(@.name=="image.tag")].value}{"\n"}{end}'
 ```
 
+## Pods and events of an environment
+
+`krci env pods <deployment> <environment>` lists every pod of the environment namespace with the `STATUS`, `READY`, and `RESTARTS` of `kubectl get pods` and its project, taken from the label `app.kubernetes.io/instance`. Below the table, Details names each container that is not running ready, failed, or was restarted, with its state, reason, exit code, message, and previous run, and for a pod with no container yet the condition that holds it back, such as `PodScheduled False (Unschedulable)`.
+
+`krci env events <deployment> <environment>` lists the Kubernetes events of the namespace, newest first. `--warnings` keeps the `Warning` events and `--pod <pod>` the events about one pod, also a pod that is gone. Events of workloads are listed too: a ReplicaSet that a quota or an admission webhook stops from creating its pods reports it here, while `env pods` shows no pod. Kubernetes keeps events for one hour by default.
+
+Both commands read the namespace with the user's session and fail with `permission denied` when the user may not list pods or events there. They read only the cluster the portal runs on: an environment whose `infrastructure.cluster` is not `in-cluster` is refused with exit code 1, see [kubectl](#kubectl).
+
 ## What krci does not cover
 
 | Need | Tier that provides it |
 |---|---|
-| Pod logs and events of a deployed application | kubectl in the environment namespace |
+| Container logs of a deployed application | `kubectl logs` in the environment namespace |
+| Pods and events of an environment on another cluster | kubectl with a kubeconfig for that cluster |
 | Per-resource diff between Git and the cluster | kubectl on the Application resource, or the Application's page in Argo CD: `argocdUrl` of `krci env get` is its path on the Argo CD server |
 | Status message of a Codebase or CodebaseBranch | kubectl on the resource, see the fields in [vocabulary.md](vocabulary.md) |
 | Deploying, promoting, approving a quality gate | The portal. A skill that does this through the cluster says so and passes the confirmation gate. |
@@ -184,7 +197,7 @@ Read-only verbs are `get`, `describe`, `logs`, `events`, `top`, `auth`, `api-res
 Two traps:
 
 - Run history lives in Tekton Results. A finished PipelineRun stays in the cluster only as long as the platform's retention allows, so an empty `kubectl get pipelineruns` says nothing about history. Use krci for anything that is not running now.
-- An environment whose cluster is not `in-cluster` runs elsewhere. The platform cluster holds its Stage and its Argo CD Application, not its pods. Application status then comes from the Application resource, or from kubectl with a kubeconfig for the target cluster if the user has one.
+- An environment whose cluster is not `in-cluster` runs elsewhere. The platform cluster holds its Stage and its Argo CD Application, not its pods: `krci env get` still shows the Application status, and pods, events, and logs come from kubectl with a kubeconfig for the target cluster if the user has one.
 
 ## Git provider
 

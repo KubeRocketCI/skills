@@ -4,7 +4,7 @@ The platform delivers to production. An agent works with the user's identity, an
 
 ## Read-only by default
 
-Inspection needs no permission from the user: `get`, `describe`, `logs`, `events`, every krci `list` and `get`, and any command with `--dry-run`.
+Inspection needs no permission from the user: `get`, `describe`, `logs`, `events`, the krci commands that only read (`list`, `get`, `project deployments`, `project versions`, `env pods`, `env events`, `sonar gate`, `sonar issues`, `sca components`, `sca findings`, `auth status`, and `version`), and any command with `--dry-run`.
 
 State-changing means changing anything outside the user's working tree. Editing files in the working tree is not, because the user reviews the change before it leaves the machine. State-changing actions include, among others:
 

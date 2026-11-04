@@ -2,7 +2,7 @@
 name: krci-overview
 description: Foundation for delivering software on KubeRocketCI (KRCI, formerly EDP), from ticket to production, for every role. Use when a request mentions KubeRocketCI, krci, or the portal; projects or codebases, branches, builds, or Tekton pipeline runs; deployments, environments or stages, or Argo CD applications of the platform; quality gates, autotests, or promotion; where a ticket's change is deployed; a custom pipeline or the chart in deploy-templates/; and before running krci or kubectl against a tenant. Covers the lifecycle, roles, vocabulary, tools, preflight, safety contract, and ownership verdict.
 license: Apache-2.0
-compatibility: Requires a shell and the krci CLI v0.19.0 or later with a portal session. kubectl under the user's own RBAC and a Git provider CLI are optional. Written against KubeRocketCI 3.15.
+compatibility: Requires a shell and the krci CLI v0.20.0 or later with a portal session. kubectl under the user's own RBAC and a Git provider CLI are optional. Written against KubeRocketCI 3.15.
 metadata:
   access: read-only
   roles: all
@@ -19,7 +19,7 @@ Names, namespaces, and command syntax are read from the platform. Do not constru
 
 Run it before the first krci or kubectl call of a session. Answering a question from this skill alone needs no preflight.
 
-1. Run `krci version`. The skills need 0.19.0 or later: an older krci rejects flags or leaves out fields they use, so ask the user to update it first. Then run `krci auth status`. The session is valid when it exits 0. Without a valid session it exits 1 and names the reason on standard error.
+1. Run `krci version`. The skills need 0.20.0 or later: an older krci rejects flags or leaves out commands and fields they use, so ask the user to update it first. A session stored by a krci older than 0.20.0 is not used after the update, so the user logs in once more. Then run `krci auth status`. The session is valid when it exits 0. Without a valid session it exits 1 and names the reason on standard error.
 2. Without a session, ask the user to run `krci auth login --portal-url <portal-url>`. It is a browser flow that an agent cannot complete. Headless setup is in [references/tooling.md](references/tooling.md).
 3. kubectl is optional. If present, check who you are and what you may do with `kubectl auth whoami` and `kubectl auth can-i --list -n <platform-namespace>` before relying on it.
 4. The platform namespace comes from the `namespace` field of `krci project list -o json`, or from the user.
@@ -33,7 +33,7 @@ Run it before the first krci or kubectl call of a session. Answering a question 
 | build | A merge starts the build pipeline run: tests, code quality and dependency scans, image push, Git tag. The version is added to the branch's `CodebaseImageStream`. | `PipelineRun` of type `build` | `krci pipelinerun list --project <project> --type build`, `krci sonar`, `krci sca` |
 | deploy | A version is deployed to an environment from the portal, or automatically when the environment's trigger type is `Auto` or `Auto-stable`. The deploy pipeline run points the Argo CD Application at that version, and Argo CD syncs the chart from `deploy-templates/`. | `Stage`, `PipelineRun` of type `deploy`, Argo CD `Application` | `krci env get <deployment> <environment>`, `krci project deployments <project>`, `krci pipelinerun list --deployment <deployment> --env <environment> --type deploy` |
 | test | The environment's quality gates run inside the deploy pipeline run: a manual approval (`ApprovalTask`) or an autotest project run against the environment. `tests` pipeline runs execute autotests outside a deploy. | `Stage.spec.qualityGates`, `ApprovalTask` | `qualityGates[]` of `krci env get` |
-| operate | Environments are ordered by `Stage.spec.order`, and promotion deploys a verified version to the next one. Workloads run in `Stage.spec.namespace` and are reconciled by Argo CD. | `Stage`, Argo CD `Application` | `krci env list`, kubectl in the environment namespace |
+| operate | Environments are ordered by `Stage.spec.order`, and promotion deploys a verified version to the next one. Workloads run in `Stage.spec.namespace` and are reconciled by Argo CD. | `Stage`, Argo CD `Application` | `krci env list`, `krci env pods <deployment> <environment>`, `krci env events <deployment> <environment>` |
 
 Since 3.15 the platform does not update tickets. Jira steps were removed from the pipelines. The Codebase fields `ticketNamePattern` and `commitMessagePattern` still exist, and no default pipeline enforces them. To answer "where is story X", find the ticket key in branches, pull requests, or commits, then follow that change through the build to the versions that `krci project deployments` reports per environment.
 
@@ -59,17 +59,17 @@ Every role reads the platform through krci. A tracker is reached through the age
 | Deployed application | Argo CD `Application`, named `<deployment>-<environment>-<project>`, in the platform namespace | labels `app.edp.epam.com/pipeline=<deployment>`, `app.edp.epam.com/stage=<environment>` |
 | Pipeline run | Tekton `PipelineRun` | label `app.edp.epam.com/pipelinetype` |
 
-An environment's workloads run in `Stage.spec.namespace` (shown as `infrastructure.namespace` by `krci env get`). The default, which the portal fills in, is `<platform-namespace>-<deployment>-<environment>`, never just `<environment>`. When `Stage.spec.clusterName` (shown as `infrastructure.cluster`) is not `in-cluster`, those workloads live on another cluster and kubectl against the platform cluster cannot see them.
+An environment's workloads run in `Stage.spec.namespace` (shown as `infrastructure.namespace` by `krci env get`). The default, which the portal fills in, is `<platform-namespace>-<deployment>-<environment>`, never just `<environment>`. When `Stage.spec.clusterName` (shown as `infrastructure.cluster`) is not `in-cluster`, those workloads live on another cluster, out of reach of kubectl against the platform cluster and of `krci env pods` and `krci env events`.
 
 The API group is `v2.edp.epam.com`. The platform was formerly called EDP, so `edp` in names and labels is expected. More in [references/vocabulary.md](references/vocabulary.md).
 
 ## Choose the tool
 
-1. **krci first.** It needs only a portal login, covers environments on remote clusters, and reads run history from Tekton Results, as the portal does. A finished PipelineRun may already be gone from the cluster, so a `kubectl get pipelineruns` that finds nothing does not mean nothing ran.
-2. **kubectl when krci cannot answer**: pod logs and events, and status messages of resources that krci does not show. Read-only verbs, the user's RBAC.
+1. **krci first.** It needs only a portal login, covers environments on remote clusters, shows the pods and events of an environment on the portal's own cluster, and reads run history from Tekton Results, as the portal does. A finished PipelineRun may already be gone from the cluster, so a `kubectl get pipelineruns` that finds nothing does not mean nothing ran.
+2. **kubectl when krci cannot answer**: container logs, the pods and events of an environment on another cluster, and status messages of resources that krci does not show. Read-only verbs, the user's RBAC.
 3. **The Git provider** for pull requests, branches, tags, and values in the GitOps repository.
 
-Command groups are `project`, `deployment`, `env`, `pipelinerun` (alias `run`), `sca`, `sonar`, `auth`, `version`. Each group goes `list` then `get`. Confirm flags with `krci <group> <verb> --help` instead of inventing them. To find why a run failed, start here. It returns the failed task, step, exit code, and log tail of the newest failed run:
+Command groups are `project`, `deployment`, `env`, `pipelinerun` (alias `run`), `sca`, `sonar`, `auth`, `version`. Most groups go `list` then `get`, and `env` also has `pods` and `events`. Confirm flags with `krci <group> <verb> --help` instead of inventing them. To find why a run failed, start here. It returns the failed task, step, exit code, and log tail of the newest failed run:
 
 ```bash
 krci pipelinerun list --project <project> --status failed --reason -o json
