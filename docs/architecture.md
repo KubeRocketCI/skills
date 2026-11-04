@@ -154,8 +154,8 @@ A skill states what it needs to know. The tiers decide where that comes from, an
 
 ```mermaid
 flowchart LR
-    need["what the skill<br/>needs to know"] --> t1["1. krci CLI<br/>portal login only, run history,<br/>remote clusters, Sonar, SCA"]
-    t1 -->|"not covered"| t2["2. kubectl, read-only<br/>pod logs, events,<br/>status messages, Argo CD conditions"]
+    need["what the skill<br/>needs to know"] --> t1["1. krci CLI<br/>portal login only, run history,<br/>remote clusters, Sonar, SCA,<br/>pods and events on the portal's cluster"]
+    t1 -->|"not covered"| t2["2. kubectl, read-only<br/>container logs, pods and events<br/>on other clusters, status messages"]
     t2 -->|"answer is in Git"| t3["3. Git provider<br/>pull requests, release tags,<br/>GitOps values"]
 ```
 

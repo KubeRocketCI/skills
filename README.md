@@ -31,7 +31,7 @@ The skills read the platform through the [krci CLI](https://docs.kuberocketci.io
 krci auth login --portal-url https://<your-portal>
 ```
 
-`kubectl` with your platform role is optional. It adds pod logs, events, and resource status messages.
+`kubectl` with your platform role is optional. It adds container logs, the pods and events of environments on other clusters, and resource status messages.
 
 ## Use
 
