@@ -25,7 +25,7 @@ The commands are the same on Windows, macOS, and Linux.
 
 **2. Sign in to the platform**
 
-The skills read the platform through the [krci CLI](https://docs.kuberocketci.io/docs/operator-guide/advanced-installation/krci-cli). Install it with `brew tap KubeRocketCI/homebrew-tap && brew install krci`, or take the binary for your system from the [releases](https://github.com/KubeRocketCI/cli/releases), then sign in once:
+The skills read the platform through the krci CLI. [Install the CLI](https://github.com/KubeRocketCI/cli#install), then sign in once:
 
 ```bash
 krci auth login --portal-url https://<your-portal>
